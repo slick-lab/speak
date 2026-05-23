@@ -1,0 +1,13 @@
+name: speak
+version: 0.1.0
+
+authors:
+  - zendrx <ynwghosted@icloud.com>
+
+targets:
+  speak:
+    main: src/speak.cr
+
+crystal: '>= 1.19.1'
+
+license: MIT
