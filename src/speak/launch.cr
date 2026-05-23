@@ -1,4 +1,5 @@
 # launch.cr - Terminal chat interface for speak
+# Handles user input, streaming output, tool processing, and memory management
 
 require "llama"
 require "./config"
@@ -24,11 +25,10 @@ module Speak
     end
 
     def run
-      setup_terminal
       show_header
       input_loop
       save_conversation_history
-      cleanup_terminal
+      puts "\nGoodbye."
     end
 
     private def input_loop
@@ -48,6 +48,11 @@ module Speak
         when "save"
           save_conversation_history
           puts "Conversation saved."
+        when "memory"
+          show_memory
+        when "clearmemory"
+          @tool.clear_memory
+          puts "Memory cleared."
         else
           next if input.empty?
           process_user_input(input)
@@ -73,6 +78,8 @@ module Speak
 
       full_response = @tool.process_tool_calls(full_response)
 
+      puts "\n" unless full_response.empty?
+
       @history << {role: "assistant", content: full_response}
       save_conversation_history
     end
@@ -84,7 +91,15 @@ module Speak
       user_memory = @tool.memory_for_prompt
       prompt << user_memory << "\n" unless user_memory.empty?
 
-      max_history = 10
+      prompt << "## Available tools:\n"
+      prompt << "- <read>file_path</read> - Read a file and return its contents\n"
+      prompt << "- <search>query</search> - Search the web for current information (max 10 results, 30 second timeout)\n"
+      prompt << "- <memory>fact</memory> - Remember a fact about the user\n"
+      prompt << "- <memory append>fact</memory append> - Add to an existing memory\n\n"
+
+      prompt << "## Conversation history:\n"
+
+      max_history = 20
       recent = @history.last(max_history)
 
       recent.each do |msg|
@@ -92,7 +107,7 @@ module Speak
         prompt << "#{role}: #{msg[:content]}\n"
       end
 
-      prompt << "User: #{user_input}\nAssistant:"
+      prompt << "\nUser: #{user_input}\nAssistant:"
 
       prompt.to_s
     end
@@ -125,32 +140,36 @@ module Speak
         data = File.read(latest_file)
         loaded = Array({role: String, content: String}).from_json(data)
         @history = loaded
-        puts "Loaded previous conversation (#{@history.size} messages)"
+        puts "\n[Loaded previous conversation with #{@history.size} messages]"
       rescue
       end
     end
 
     private def show_header
       clear_screen
-      puts "=" * 60
-      puts "speak - Local AI Assistant".center(60)
-      puts "=" * 60
+      puts "=" * 70
+      puts "speak - Local AI Assistant".center(70)
+      puts "=" * 70
       puts "Model: #{@settings.model_file}"
       puts "Context: #{@settings.context_size} tokens"
       puts "KV Cache: #{@settings.kv_cache_type}"
-      puts "Memory: #{@tool.load_user_memory.size} bytes"
-      puts "=" * 60
-      puts "Commands: exit, clear, history, save"
-      puts "Tools: <read>file</read>, <memory>fact</memory>"
-      puts "=" * 60
+      
+      memory_content = @tool.load_user_memory
+      memory_size = memory_content.bytesize
+      puts "Memory: #{memory_size} bytes (#{memory_content.lines.size} lines)"
+      
+      puts "=" * 70
+      puts "Commands: exit, clear, history, save, memory, clearmemory"
+      puts "Tools: <read>file</read> | <search>query</search> | <memory>fact</memory>"
+      puts "=" * 70
     end
 
     private def show_history
       return puts("\nNo conversation history.") if @history.empty?
 
-      puts "\n" + "=" * 60
-      puts "Conversation History".center(60)
-      puts "=" * 60
+      puts "\n" + "=" * 70
+      puts "Conversation History".center(70)
+      puts "=" * 70
 
       @history.each_with_index do |msg, i|
         role = msg[:role].capitalize
@@ -163,19 +182,31 @@ module Speak
         puts "[#{i + 1}] #{role}: #{content}"
       end
 
-      puts "=" * 60
+      puts "=" * 70
       puts "Total: #{@history.size} messages"
+    end
+
+    private def show_memory
+      memory = @tool.load_user_memory
+      
+      if memory.empty?
+        puts "\nNo memory stored yet."
+        puts "The AI will remember facts when you say things like:"
+        puts "  'I'm a software engineer'"
+        puts "  'My name is Sarah'"
+        puts "  'I prefer short answers'"
+      else
+        puts "\n" + "=" * 70
+        puts "User Memory".center(70)
+        puts "=" * 70
+        puts memory
+        puts "=" * 70
+        puts "\nYou can edit this file directly: #{Tool::MEMORY_FILE}"
+      end
     end
 
     private def clear_screen
       print "\e[2J\e[H"
-    end
-
-    private def setup_terminal
-    end
-
-    private def cleanup_terminal
-      puts "\n\nGoodbye."
     end
   end
 end
