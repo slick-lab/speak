@@ -32,11 +32,16 @@ module Speak
       @disk_cache = DiskCache.new(context, @settings)
       @history = [] of {role: String, content: String}
       @running = true
-      @system_prompt = "You are speak, a helpful AI assistant. Be concise and accurate."
+      @system_prompt = load_system_prompt
       
       # Load conversation history from disk cache if it exists
       load_conversation_history
     end
+
+    def load_system_prompt
+      prompt_path = "system_prompt.txt"
+      return File.read(prompt_path)
+    end 
 
     # Starts the main chat loop.
     #
