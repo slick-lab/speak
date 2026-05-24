@@ -1,4 +1,6 @@
 require "llama"
+require "readline"
+require "json"
 require "./config"
 require "./disk"
 require "./tool"

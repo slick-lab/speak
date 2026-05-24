@@ -7,6 +7,9 @@ module Speak
     EPISODIC_DIR = "#{MEMORY_DIR}/episodic"
     SEMANTIC_DIR = "#{MEMORY_DIR}/semantic"
     WORKING_MEMORY_FILE = "#{MEMORY_DIR}/working.json"
+    @session_id : String
+    @working : WorkingMemory
+    @episodic_cache : Array(EpisodicMemory)?
 
     struct WorkingMemory
       include JSON::Serializable

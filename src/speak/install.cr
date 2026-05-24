@@ -127,7 +127,7 @@ module Speak
 
       if existing_size > 0
         headers["Range"] = "bytes=#{existing_size}-"
-        puts "Resuming from #{format_bytes(existing_size)}"
+        puts "Resuming from #{format_bytes(existing_size.to_u64.to_u64)}"
       end
 
       begin
@@ -154,7 +154,7 @@ module Speak
                 percent = (downloaded * 100 / total_size).to_i
                 elapsed = (Time.monotonic - start_time).total_seconds
                 speed = elapsed > 0 ? (downloaded - existing_size).to_f / elapsed / (1024 * 1024) : 0
-                print "\rProgress: #{percent}% | #{format_bytes(downloaded)} / #{format_bytes(total_size)} | #{speed.round(1)} MB/s"
+                print "\rProgress: #{percent}% | #{format_bytes(downloaded.to_u64)} / #{format_bytes(total_size.to_u64)} | #{speed.round(1)} MB/s"
                 STDOUT.flush
               end
             end

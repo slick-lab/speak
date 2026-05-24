@@ -10,9 +10,8 @@ targets:
 
 crystal: '>= 1.19.1'
 
-# Using local copy of llama.cr in lib/ due to versioning issues
-# dependencies:
-#   llama:
-#     github: kojix2/llama.cr
+dependencies:
+  readline:
+    github: crystal-lang/crystal-readline
 
 license: MIT

@@ -265,11 +265,11 @@ module Speak
       return "" if memory.empty?
 
       <<-MEMORY
-## Information I know about the user:
-#{memory}
+        ## Information I know about the user:
+        #{memory}
 
-Note: This information was provided by the user in previous conversations.
-To update this information, use the remember tool.
+       Note: This information was provided by the user in previous conversations.
+       To update this information, use the remember tool.
 
       MEMORY
     end

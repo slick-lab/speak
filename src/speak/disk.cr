@@ -74,7 +74,7 @@ module Speak
     #
     # - context: The Llama::Context to wrap with disk caching
     # - settings: The ActiveSettings from config.json (source of truth)
-    def initialize(@context : Llama::Context, @settings : ActiveSettings, @vocab : Llama::Vocab)
+    def initialize(@context : Llama::Context, @vocab : Llama::Vocab, @settings : ActiveSettings)
       Dir.mkdir_p(CACHE_DIR) unless Dir.exists?(CACHE_DIR)
 
       @state = Llama::State.new(@context)
