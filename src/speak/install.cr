@@ -3,31 +3,31 @@ require "digest/md5"
 
 module Speak
   class Install
-    CACHE_DIR = "./speak/models"
-    PARTIAL_EXT = ".partial"
-    MAX_RETRIES = 3
-    INITIAL_RETRY_DELAY = 1.0
-    CHUNK_SIZE = 8192
+    CACHE_DIR           = "./speak/models"
+    PARTIAL_EXT         = ".partial"
+    MAX_RETRIES         =    3
+    INITIAL_RETRY_DELAY =  1.0
+    CHUNK_SIZE          = 8192
 
     MODEL_URLS = {
       "Q2_K" => {
-        url: "https://huggingface.co/bartowski/Nanbeige4.1-3B-GGUF/resolve/main/Nanbeige4.1-3B-Q2_K.gguf",
+        url:     "https://huggingface.co/TheBloke/Nanbeige4.1-3B-GGUF/resolve/main/Nanbeige4.1-3B-Q2_K.gguf",
         size_mb: 1700,
       },
       "Q4_K_M" => {
-        url: "https://huggingface.co/bartowski/Nanbeige4.1-3B-GGUF/resolve/main/Nanbeige4.1-3B-Q4_K_M.gguf",
+        url:     "https://huggingface.co/TheBloke/Nanbeige4.1-3B-GGUF/resolve/main/Nanbeige4.1-3B-Q4_K_M.gguf",
         size_mb: 2500,
       },
       "Q6_K" => {
-        url: "https://huggingface.co/bartowski/Nanbeige4.1-3B-GGUF/resolve/main/Nanbeige4.1-3B-Q6_K.gguf",
+        url:     "https://huggingface.co/TheBloke/Nanbeige4.1-3B-GGUF/resolve/main/Nanbeige4.1-3B-Q6_K.gguf",
         size_mb: 3300,
-      }
+      },
     }
 
     struct DownloadProgress
       property downloaded : UInt64
       property total : UInt64
-      property start_time : Time
+      property start_time : Time::Span
       property speed_samples : Array(Float64)
 
       def initialize(@total : UInt64)
@@ -55,7 +55,9 @@ module Speak
 
       def update_sample
         speed_samples << speed_mbps
-        speed_samples = speed_samples.last(10) if speed_samples.size > 10
+        if speed_samples.size > 10
+          speed_sample = speed_samples.last(10)
+        end
       end
 
       def average_speed : Float64
@@ -121,10 +123,10 @@ module Speak
         if File.exists?(partial_path)
           existing_size = File.size(partial_path)
           current_path = partial_path
-          puts "Resuming from #{format_bytes(existing_size)}" if existing_size > 0
+          puts "Resuming from #{format_bytes(existing_size.to_u64)}" if existing_size > 0
         elsif File.exists?(dest_path)
           existing_size = File.size(dest_path)
-          puts "Resuming from #{format_bytes(existing_size)}" if existing_size > 0
+          puts "Resuming from #{format_bytes(existing_size.to_u64)}" if existing_size > 0
         end
 
         if existing_size >= expected_size
@@ -133,7 +135,7 @@ module Speak
         end
 
         begin
-          downloaded = perform_download(url, current_path, existing_size, expected_size)
+          downloaded = perform_download(url, current_path, existing_size.to_u64, expected_size)
 
           if downloaded >= expected_size
             File.rename(current_path, dest_path) if current_path != dest_path
@@ -146,8 +148,7 @@ module Speak
             puts "\nConnection issue, retrying in #{delay.to_i} seconds... (attempt #{retries + 1}/#{MAX_RETRIES})"
             sleep(delay)
           end
-
-        rescue ex : IO::Timeout | IO::Error | Socket::Error
+        rescue ex : IO::TimeoutError | IO::Error | Socket::Error
           retries += 1
           if retries < MAX_RETRIES
             delay = INITIAL_RETRY_DELAY * (2 ** retries)
@@ -221,15 +222,15 @@ module Speak
       bar = "█" * filled + "░" * (bar_width - filled)
 
       eta_str = if eta > 3600
-        "#{eta / 3600}h #{ (eta % 3600) / 60 }m"
-      elsif eta > 60
-        "#{eta / 60}m #{eta % 60}s"
-      else
-        "#{eta}s"
-      end
+                  "#{eta / 3600}h #{(eta % 3600) / 60}m"
+                elsif eta > 60
+                  "#{eta / 60}m #{eta % 60}s"
+                else
+                  "#{eta}s"
+                end
 
       print "\r[%s] %3d%% | %6.1f MB / %6.1f MB | %5.1f MB/s | ETA: %s" % [
-        bar, percent, downloaded_mb, total_mb, speed, eta_str
+        bar, percent, downloaded_mb, total_mb, speed, eta_str,
       ]
       STDOUT.flush
     end
@@ -240,7 +241,7 @@ module Speak
       actual_size = File.size(file_path)
 
       if actual_size != expected_size
-        puts "\nSize mismatch: expected #{format_bytes(expected_size)}, got #{format_bytes(actual_size)}"
+        puts "\nSize mismatch: expected #{format_bytes(expected_size)}, got #{format_bytes(actual_size.to_u64)}"
         return false
       end
 

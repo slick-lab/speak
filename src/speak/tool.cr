@@ -4,9 +4,9 @@ require "uri"
 
 module Speak
   class Tool
-    MEMORY_DIR = "./speak/memory"
-    MEMORY_FILE = "./speak/memory/user.md"
-    SEARCH_TIMEOUT = 30.seconds
+    MEMORY_DIR         = "./speak/memory"
+    MEMORY_FILE        = "./speak/memory/user.md"
+    SEARCH_TIMEOUT     = 30.seconds
     MAX_SEARCH_RESULTS = 10
 
     @memory_cache : String?
@@ -89,8 +89,8 @@ module Speak
         client.connect_timeout = SEARCH_TIMEOUT
 
         response = client.get("/html/?q=#{encoded_query}", headers: HTTP::Headers{
-          "User-Agent" => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-          "Accept" => "text/html,application/xhtml+xml",
+          "User-Agent"      => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          "Accept"          => "text/html,application/xhtml+xml",
           "Accept-Language" => "en-US,en;q=0.9",
         })
 
@@ -105,7 +105,7 @@ module Speak
         else
           return "Search failed with HTTP status: #{response.status_code}"
         end
-      rescue ex : IO::Timeout
+      rescue ex : IO::TimeoutError
         return "Search timed out after #{SEARCH_TIMEOUT.total_seconds} seconds. Please try a more specific query."
       rescue ex
         return "Search error: #{ex.message}"
@@ -179,7 +179,7 @@ module Speak
     end
 
     def append_fact(fact : String)
-      timestamp = Time.now.to_s("%Y-%m-%d %H:%M:%S")
+      timestamp = Time.utc.to_s("%Y-%m-%d %H:%M:%S")
       File.open(MEMORY_FILE, "a") do |file|
         file.puts "\n[#{timestamp}] #{fact}"
       end
@@ -191,12 +191,11 @@ module Speak
       return "" if memory.empty?
 
       <<-MEMORY
-## Information I know about the user:
-#{memory}
+        ## Information I know about the user:
+        #{memory}
 
-Note: This information was provided by the user in previous conversations.
-To update this information, output <memory>new fact</memory> or <memory append>additional fact</memory append>.
-
+        Note: This information was provided by the user in previous conversations.
+        To update this information, output <memory>new fact</memory> or <memory append>additional fact</memory append>.
       MEMORY
     end
 

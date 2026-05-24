@@ -74,7 +74,7 @@ module Speak
     #
     # - context: The Llama::Context to wrap with disk caching
     # - settings: The ActiveSettings from config.json (source of truth)
-    def initialize(@context : Llama::Context, @settings : ActiveSettings)
+    def initialize(@context : Llama::Context, @settings : ActiveSettings, @vocab : Llama::Vocab)
       Dir.mkdir_p(CACHE_DIR) unless Dir.exists?(CACHE_DIR)
 
       @state = Llama::State.new(@context)
@@ -97,8 +97,8 @@ module Speak
     #
     # - prompt: The user input to generate a response for
     # - Yields each token as a string as it is generated
-    def generate(prompt : String)
-      cache_key = cache_key_for(@context, prompt)
+    def generate(prompt : String, &)
+      cache_key = cache_key_for(prompt)
       cache_path = cache_path_for(cache_key)
 
       # Load existing cache from disk if available
@@ -112,17 +112,18 @@ module Speak
       @token_history.clear
 
       # Generate with streaming - tokens appear in real time
-      @context.generate(
+      response = @context.generate(
         prompt,
         max_tokens: @settings.max_tokens,
         temperature: @settings.temperature
-      ) do |token|
-        @token_history << token.ord unless token.empty?
-        yield token
-      end
+      )
 
-      # Save updated cache back to disk
+      tokens = @vocab.tokenize(prompt)
+      @token_history = tokens
+
       save_cache(cache_path, cache_key)
+
+      response
     end
 
     # Clears all cached KV files and metadata.
@@ -196,10 +197,10 @@ module Speak
     # - context: The Llama::Context (needed for tokenization)
     # - prompt: The raw user input string
     # - Returns: SHA1 hex digest of the token ID sequence
-    private def cache_key_for(context : Llama::Context, prompt : String) : String
+    private def cache_key_for(prompt : String) : String
       # 1. Tokenize the prompt using the model's tokenizer
       #    This produces the exact token IDs the model will process
-      token_ids = context.tokenize(prompt)
+      token_ids = @vocab.tokenize(prompt)
 
       # 2. Create a buffer for little-endian 32-bit integers
       #    ds4 hashes each token ID as a little-endian u32
@@ -250,9 +251,9 @@ module Speak
     # Requires the current token sequence to properly save the conversation state.
     private def save_cache(path : String, cache_key : String)
       begin
-        bytes_written = @state.save_file(path, @token_history)
+        success = @state.save_file(path, @token_history)
 
-        if bytes_written > 0
+        if success
           # Update or create metadata for this cache
           @cache_metadata[cache_key] = CacheMetadata.new(
             access_time: Time.utc.to_unix,

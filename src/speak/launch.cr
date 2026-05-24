@@ -3,7 +3,7 @@
 
 require "llama"
 require "./config"
-require "./disk_cache"
+require "./disk"
 require "./tool"
 
 module Speak
@@ -15,8 +15,8 @@ module Speak
     @running : Bool
     @system_prompt : String
 
-    def initialize(context : Llama::Context, @settings : ActiveSettings)
-      @disk_cache = DiskCache.new(context, @settings)
+    def initialize(context : Llama::Context, model : Llama::Model, @settings : ActiveSettings)
+      @disk_cache = DiskCache.new(context, @settings, model.vocab)
       @tool = Tool.new
       @history = [] of {role: String, content: String}
       @running = true
@@ -121,7 +121,7 @@ module Speak
 
       Dir.mkdir_p("./speak/history") unless Dir.exists?("./speak/history")
 
-      timestamp = Time.now.to_s("%Y%m%d_%H%M%S")
+      timestamp = Time.utc.to_s("%Y%m%d_%H%M%S")
       history_file = "./speak/history/chat_#{timestamp}.json"
 
       history_json = @history.map do |msg|
@@ -153,11 +153,11 @@ module Speak
       puts "Model: #{@settings.model_file}"
       puts "Context: #{@settings.context_size} tokens"
       puts "KV Cache: #{@settings.kv_cache_type}"
-      
+
       memory_content = @tool.load_user_memory
       memory_size = memory_content.bytesize
       puts "Memory: #{memory_size} bytes (#{memory_content.lines.size} lines)"
-      
+
       puts "=" * 70
       puts "Commands: exit, clear, history, save, memory, clearmemory"
       puts "Tools: <read>file</read> | <search>query</search> | <memory>fact</memory>"
@@ -188,7 +188,7 @@ module Speak
 
     private def show_memory
       memory = @tool.load_user_memory
-      
+
       if memory.empty?
         puts "\nNo memory stored yet."
         puts "The AI will remember facts when you say things like:"
