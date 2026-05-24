@@ -461,7 +461,7 @@ module Speak
     end
 
     it "has valid help output (if implemented)" do
-      # This is a placeholder - add when --help is implemented
+      # This is a placeholder - till when --help will be  implemented
       true.should be_true
     end
 
