@@ -1,70 +1,29 @@
 require "http/client"
-require "digest/md5"
+require "json"
 
 module Speak
   class Install
-    CACHE_DIR           = "./speak/models"
-    PARTIAL_EXT         = ".partial"
-    MAX_RETRIES         =    3
-    INITIAL_RETRY_DELAY =  1.0
-    CHUNK_SIZE          = 8192
+    CACHE_DIR = "./speak/models"
+    HFD_SCRIPT_URL = "https://hf-mirror.com/hfd/hfd.sh"
+    HFD_PATH = "./hfd.sh"
 
     MODEL_URLS = {
       "Q2_K" => {
-        url:     "https://huggingface.co/TheBloke/Nanbeige4.1-3B-GGUF/resolve/main/Nanbeige4.1-3B-Q2_K.gguf",
+        repo_id: "mradermacher/Nanbeige4.1-3B-GGUF",
+        filename: "Nanbeige4.1-3B.Q2_K.gguf",
         size_mb: 1700,
       },
       "Q4_K_M" => {
-        url:     "https://huggingface.co/TheBloke/Nanbeige4.1-3B-GGUF/resolve/main/Nanbeige4.1-3B-Q4_K_M.gguf",
+        repo_id: "Edge-Quant/Nanbeige4.1-3B-Q4_K_M-GGUF",
+        filename: "nanbeige4.1-3b-q4_k_m.gguf",
         size_mb: 2500,
       },
       "Q6_K" => {
-        url:     "https://huggingface.co/TheBloke/Nanbeige4.1-3B-GGUF/resolve/main/Nanbeige4.1-3B-Q6_K.gguf",
+        repo_id: "mradermacher/Nanbeige4.1-3B-GGUF",
+        filename: "Nanbeige4.1-3B.Q6_K.gguf",
         size_mb: 3300,
       },
     }
-
-    struct DownloadProgress
-      property downloaded : UInt64
-      property total : UInt64
-      property start_time : Time::Span
-      property speed_samples : Array(Float64)
-
-      def initialize(@total : UInt64)
-        @downloaded = 0_u64
-        @start_time = Time.monotonic
-        @speed_samples = [] of Float64
-      end
-
-      def percentage : Int32
-        return 0 if total == 0
-        ((downloaded * 100) / total).to_i
-      end
-
-      def speed_mbps : Float64
-        elapsed = (Time.monotonic - start_time).total_seconds
-        return 0.0 if elapsed == 0
-        (downloaded.to_f / (1024 * 1024)) / elapsed
-      end
-
-      def eta_seconds : Int32
-        return 0 if speed_mbps == 0
-        remaining_mb = (total - downloaded).to_f / (1024 * 1024)
-        (remaining_mb / speed_mbps).to_i
-      end
-
-      def update_sample
-        speed_samples << speed_mbps
-        if speed_samples.size > 10
-          speed_sample = speed_samples.last(10)
-        end
-      end
-
-      def average_speed : Float64
-        return 0.0 if speed_samples.empty?
-        speed_samples.sum / speed_samples.size
-      end
-    end
 
     def initialize
       Dir.mkdir_p(CACHE_DIR) unless Dir.exists?(CACHE_DIR)
@@ -78,174 +37,133 @@ module Speak
       end
 
       model_info = MODEL_URLS[quant]
-      filename = File.basename(model_info[:url])
-      dest_path = File.join(CACHE_DIR, filename)
-      partial_path = dest_path + PARTIAL_EXT
+      dest_path = File.join(CACHE_DIR, model_info[:filename])
 
       if File.exists?(dest_path)
-        expected_size = model_info[:size_mb].to_u64 * 1024 * 1024
         actual_size = File.size(dest_path)
-
-        if actual_size == expected_size
-          puts "Model already installed: #{filename}"
+        expected_size = model_info[:size_mb].to_u64 * 1024 * 1024
+        if actual_size >= expected_size - (1024 * 1024)
+          puts "Model already exists: #{model_info[:filename]}"
           return true
         else
-          puts "Existing file corrupted, re-downloading..."
+          puts "Existing file incomplete, re-downloading..."
           File.delete(dest_path) if File.exists?(dest_path)
         end
       end
 
-      puts "Downloading #{quant} model..."
-      puts "File: #{filename}"
-      puts "Size: #{format_bytes(model_info[:size_mb].to_u64 * 1024 * 1024)}"
-      puts "From: #{model_info[:url]}"
-      puts ""
-
-      success = download_with_resume(model_info[:url], dest_path, partial_path, model_info[:size_mb].to_u64)
-
-      if success
-        puts "\nInstallation complete: #{filename}"
-        true
-      else
-        puts "\nInstallation failed"
-        false
-      end
-    end
-
-    private def download_with_resume(url : String, dest_path : String, partial_path : String, expected_size_mb : UInt64) : Bool
-      retries = 0
-      expected_size = expected_size_mb * 1024 * 1024
-
-      while retries < MAX_RETRIES
-        existing_size = 0_u64
-        current_path = dest_path
-
-        if File.exists?(partial_path)
-          existing_size = File.size(partial_path)
-          current_path = partial_path
-          puts "Resuming from #{format_bytes(existing_size.to_u64)}" if existing_size > 0
-        elsif File.exists?(dest_path)
-          existing_size = File.size(dest_path)
-          puts "Resuming from #{format_bytes(existing_size.to_u64)}" if existing_size > 0
-        end
-
-        if existing_size >= expected_size
-          File.rename(current_path, dest_path) if current_path != dest_path
-          return verify_integrity(dest_path, expected_size)
-        end
-
-        begin
-          downloaded = perform_download(url, current_path, existing_size.to_u64, expected_size)
-
-          if downloaded >= expected_size
-            File.rename(current_path, dest_path) if current_path != dest_path
-            return verify_integrity(dest_path, expected_size)
-          end
-
-          retries += 1
-          if retries < MAX_RETRIES
-            delay = INITIAL_RETRY_DELAY * (2 ** retries)
-            puts "\nConnection issue, retrying in #{delay.to_i} seconds... (attempt #{retries + 1}/#{MAX_RETRIES})"
-            sleep(delay)
-          end
-        rescue ex : IO::TimeoutError | IO::Error | Socket::Error
-          retries += 1
-          if retries < MAX_RETRIES
-            delay = INITIAL_RETRY_DELAY * (2 ** retries)
-            puts "\nNetwork error: #{ex.message}. Retrying in #{delay.to_i}s..."
-            sleep(delay)
-          else
-            puts "\nNetwork error after #{MAX_RETRIES} attempts: #{ex.message}"
-            return false
-          end
-        rescue ex
-          puts "\nUnexpected error: #{ex.message}"
-          return false
-        end
-      end
-
-      false
-    end
-
-    private def perform_download(url : String, file_path : String, start_offset : UInt64, expected_size : UInt64) : UInt64
-      downloaded = start_offset
-
-      headers = HTTP::Headers.new
-      headers["User-Agent"] = "speak-installer/1.0"
-      headers["Range"] = "bytes=#{start_offset}-" if start_offset > 0
-
-      File.open(file_path, "ab") do |file|
-        HTTP::Client.get(url, headers) do |response|
-          unless response.status_code == 200 || response.status_code == 206
-            raise "HTTP #{response.status_code}: #{response.status_message}"
-          end
-
-          total_size = expected_size
-          if content_range = response.headers["Content-Range"]?
-            if match = content_range.match(%r{bytes \d+-(\d+)/})
-              total_size = match[1].to_u64
-            end
-          elsif content_length = response.headers["Content-Length"]?
-            total_size = content_length.to_u64 + start_offset
-          end
-
-          progress = DownloadProgress.new(total_size)
-          progress.downloaded = start_offset
-
-          buffer = Bytes.new(CHUNK_SIZE * 4)
-
-          while bytes_read = response.body_io.read(buffer)
-            break if bytes_read == 0
-
-            file.write(buffer[0, bytes_read])
-            downloaded += bytes_read
-            progress.downloaded = downloaded
-
-            progress.update_sample
-            display_progress(progress)
-          end
-        end
-      end
-
-      downloaded
-    end
-
-    private def display_progress(progress : DownloadProgress)
-      percent = progress.percentage
-      downloaded_mb = progress.downloaded / (1024 * 1024)
-      total_mb = progress.total / (1024 * 1024)
-      speed = progress.average_speed
-      eta = progress.eta_seconds
-
-      bar_width = 40
-      filled = (bar_width * percent / 100).to_i
-      bar = "█" * filled + "░" * (bar_width - filled)
-
-      eta_str = if eta > 3600
-                  "#{eta / 3600}h #{(eta % 3600) / 60}m"
-                elsif eta > 60
-                  "#{eta / 60}m #{eta % 60}s"
-                else
-                  "#{eta}s"
-                end
-
-      print "\r[%s] %3d%% | %6.1f MB / %6.1f MB | %5.1f MB/s | ETA: %s" % [
-        bar, percent, downloaded_mb, total_mb, speed, eta_str,
-      ]
-      STDOUT.flush
-    end
-
-    private def verify_integrity(file_path : String, expected_size : UInt64) : Bool
-      return false unless File.exists?(file_path)
-
-      actual_size = File.size(file_path)
-
-      if actual_size != expected_size
-        puts "\nSize mismatch: expected #{format_bytes(expected_size)}, got #{format_bytes(actual_size.to_u64)}"
+      if !check_command("bash")
+        puts "Error: bash is required but not found"
         return false
       end
 
-      true
+      install_aria2_if_needed
+      setup_hfd
+      download_with_hfd(model_info[:repo_id], model_info[:filename], quant)
+
+      if File.exists?(dest_path)
+        puts "\nInstallation complete: #{model_info[:filename]}"
+        return true
+      else
+        puts "\nInstallation failed"
+        return false
+      end
+    end
+
+    private def check_command(cmd : String) : Bool
+      `which #{cmd} 2>/dev/null`.strip.empty? == false
+    end
+
+    private def install_aria2_if_needed
+      return if check_command("aria2c")
+
+      puts "\naria2c not found. Installing aria2 for faster downloads..."
+
+      if check_command("apt")
+        system("sudo apt install -y aria2")
+      elsif check_command("yum")
+        system("sudo yum install -y aria2")
+      elsif check_command("dnf")
+        system("sudo dnf install -y aria2")
+      elsif check_command("pacman")
+        system("sudo pacman -S --noconfirm aria2")
+      elsif check_command("brew")
+        system("brew install aria2")
+      else
+        puts "Warning: Could not install aria2. Will use fallback download."
+      end
+    end
+
+    private def setup_hfd
+      return if File.exists?(HFD_PATH) && File.executable?(HFD_PATH)
+
+      puts "Downloading hfd.sh..."
+      system("wget -q -O #{HFD_PATH} #{HFD_SCRIPT_URL}")
+      system("chmod a+x #{HFD_PATH}")
+    end
+
+    private def download_with_hfd(repo_id : String, filename : String, quant : String)
+      puts "\nDownloading #{quant} model..."
+      puts "This may take a few minutes depending on your connection.\n\n"
+
+      ENV["HF_ENDPOINT"] = "https://hf-mirror.com"
+
+      cmd = "bash #{HFD_PATH} #{repo_id} --include #{filename} --local-dir #{CACHE_DIR} --tool aria2c -x 4"
+      system(cmd)
+
+      unless File.exists?(File.join(CACHE_DIR, filename))
+        puts "\nhfd failed, trying fallback download..."
+        fallback_download(repo_id, filename)
+      end
+    end
+
+    private def fallback_download(repo_id : String, filename : String)
+      url = "https://huggingface.co/#{repo_id}/resolve/main/#{filename}"
+      dest_path = File.join(CACHE_DIR, filename)
+
+      headers = HTTP::Headers.new
+      headers["User-Agent"] = "speak-installer/1.0"
+
+      existing_size = File.exists?(dest_path) ? File.size(dest_path) : 0_u64
+
+      if existing_size > 0
+        headers["Range"] = "bytes=#{existing_size}-"
+        puts "Resuming from #{format_bytes(existing_size)}"
+      end
+
+      begin
+        HTTP::Client.get(url, headers) do |response|
+          unless response.status_code == 200 || response.status_code == 206
+            puts "HTTP #{response.status_code}: Failed to download"
+            return
+          end
+
+          total_size = response.headers["Content-Length"]?.try(&.to_u64) || 0_u64
+          total_size += existing_size
+
+          File.open(dest_path, existing_size > 0 ? "ab" : "wb") do |file|
+            buffer = Bytes.new(8192)
+            downloaded = existing_size
+            start_time = Time.monotonic
+
+            while bytes_read = response.body_io.read(buffer)
+              break if bytes_read == 0
+              file.write(buffer[0, bytes_read])
+              downloaded += bytes_read
+
+              if total_size > 0
+                percent = (downloaded * 100 / total_size).to_i
+                elapsed = (Time.monotonic - start_time).total_seconds
+                speed = elapsed > 0 ? (downloaded - existing_size).to_f / elapsed / (1024 * 1024) : 0
+                print "\rProgress: #{percent}% | #{format_bytes(downloaded)} / #{format_bytes(total_size)} | #{speed.round(1)} MB/s"
+                STDOUT.flush
+              end
+            end
+          end
+        end
+        puts "\nFallback download completed"
+      rescue ex
+        puts "\nFallback download failed: #{ex.message}"
+      end
     end
 
     private def format_bytes(bytes : UInt64) : String
