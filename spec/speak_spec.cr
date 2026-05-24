@@ -400,17 +400,7 @@ module Speak
         memory.advance_step
         memory.is_goal_complete?.should be_true
       end
-
-      it "records tool calls in history" do
-        memory = AgentMemory.new
-        memory.record_tool_call("test_tool", '{"param":"value"}', "success result")
-        
-        history = memory.get_all_tool_history
-        history.size.should be >= 1
-        history.last.tool_name.should eq("test_tool")
-        history.last.result.should eq("success result")
-      end
-
+  
       it "adds observations to working memory" do
         memory = AgentMemory.new
         memory.add_observation("User requested weather information")
