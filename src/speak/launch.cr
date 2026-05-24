@@ -1,23 +1,24 @@
-# launch.cr - Terminal chat interface for speak
-# Handles user input, streaming output, tool processing, and memory management
-
 require "llama"
 require "./config"
 require "./disk"
 require "./tool"
+require "./memory"
 
 module Speak
   class Launch
     @disk_cache : DiskCache
     @tool : Tool
+    @memory : AgentMemory
     @settings : ActiveSettings
     @history : Array({role: String, content: String})
     @running : Bool
     @system_prompt : String
+    @max_iterations : Int32 = 10
 
     def initialize(context : Llama::Context, model : Llama::Model, @settings : ActiveSettings)
-      @disk_cache = DiskCache.new(context, @settings, model.vocab)
+      @disk_cache = DiskCache.new(context, model.vocab, @settings)
       @tool = Tool.new
+      @memory = AgentMemory.new
       @history = [] of {role: String, content: String}
       @running = true
       @system_prompt = load_system_prompt
@@ -34,8 +35,12 @@ module Speak
     private def input_loop
       while @running
         print "\n> "
-        input = gets || ""
-        input = input.strip
+        input = Readline.readline("", true)
+        input = input.to_s.strip
+
+        if input.empty?
+          next
+        end
 
         case input.downcase
         when "exit", "quit"
@@ -52,9 +57,12 @@ module Speak
           show_memory
         when "clearmemory"
           @tool.clear_memory
+          @memory.clear_session
           puts "Memory cleared."
+        when "reset"
+          @memory.reset_working_memory
+          puts "Working memory reset."
         else
-          next if input.empty?
           process_user_input(input)
         end
       end
@@ -62,54 +70,120 @@ module Speak
 
     private def process_user_input(input : String)
       @history << {role: "user", content: input}
-
-      prompt = build_prompt(input)
-
-      print "\nspeak: "
-      response = String::Builder.new
-
-      @disk_cache.generate(prompt) do |token|
-        print token
-        response << token
-        STDOUT.flush
-      end
-
-      full_response = response.to_s.strip
-
-      full_response = @tool.process_tool_calls(full_response)
-
-      puts "\n" unless full_response.empty?
-
-      @history << {role: "assistant", content: full_response}
+      
+      final_answer = agent_loop(input)
+      
+      @history << {role: "assistant", content: final_answer}
+      @memory.save_episodic_memory(input, final_answer, "success")
       save_conversation_history
+      
+      puts "\nspeak: #{final_answer}"
     end
 
-    private def build_prompt(user_input : String) : String
-      prompt = String::Builder.new
-      prompt << @system_prompt << "\n\n"
-
-      user_memory = @tool.memory_for_prompt
-      prompt << user_memory << "\n" unless user_memory.empty?
-
-      prompt << "## Available tools:\n"
-      prompt << "- <read>file_path</read> - Read a file and return its contents\n"
-      prompt << "- <search>query</search> - Search the web for current information (max 10 results, 30 second timeout)\n"
-      prompt << "- <memory>fact</memory> - Remember a fact about the user\n"
-      prompt << "- <memory append>fact</memory append> - Add to an existing memory\n\n"
-
-      prompt << "## Conversation history:\n"
-
-      max_history = 20
-      recent = @history.last(max_history)
-
-      recent.each do |msg|
-        role = msg[:role] == "user" ? "User" : "Assistant"
-        prompt << "#{role}: #{msg[:content]}\n"
+    private def agent_loop(user_input : String) : String
+      messages = build_initial_messages(user_input)
+      iteration = 0
+      
+      while iteration < @max_iterations
+        prompt = build_prompt_from_messages(messages)
+        response = generate_response(prompt)
+        
+        tool_result = @tool.process_tool_calls(response)
+        
+        if tool_result[:handled]
+          messages << {role: "assistant", content: response}
+          messages << {role: "tool", content: tool_result[:result]}
+          
+          if tool_result[:result].starts_with?("FINISH:")
+            return tool_result[:result].gsub("FINISH:", "")
+          end
+          
+          observation = "Tool result: #{tool_result[:result]}"
+          @memory.add_observation(observation)
+          @memory.record_tool_call(
+            extract_tool_name(response),
+            extract_tool_args(response),
+            tool_result[:result]
+          )
+          iteration += 1
+        else
+          @memory.save_episodic_memory(user_input, response, "success")
+          return response
+        end
       end
+      
+      "I've exceeded my maximum attempts. Please try a simpler request."
+    end
 
-      prompt << "\nUser: #{user_input}\nAssistant:"
+    private def build_initial_messages(user_input : String) : Array({role: String, content: String})
+      messages = [] of {role: String, content: String}
+      
+      system_content = String::Builder.new
+      system_content << @system_prompt << "\n\n"
+      system_content << "## Available Tools\n"
+      system_content << @tool.tools_schema << "\n\n"
+      system_content << "## Tool Usage Format\n"
+      system_content << "When you need to use a tool, output:\n"
+      system_content << "<tool_call>{\"name\": \"tool_name\", \"arguments\": {\"param\": \"value\"}}</tool_call>\n\n"
+      system_content << "After receiving tool results, continue your response.\n"
+      system_content << "When you have the complete answer, call the finish tool.\n\n"
+      
+      user_memory = @tool.memory_for_prompt
+      if !user_memory.empty?
+        system_content << user_memory << "\n"
+      end
+      
+      agent_memory = @memory.build_memory_prompt
+      if !agent_memory.empty?
+        system_content << agent_memory << "\n"
+      end
+      
+      messages << {role: "system", content: system_content.to_s}
+      messages << {role: "user", content: user_input}
+      
+      messages
+    end
 
+    private def build_prompt_from_messages(messages : Array({role: String, content: String})) : String
+      prompt = String::Builder.new
+      
+      messages.each do |msg|
+        case msg[:role]
+        when "system"
+          prompt << msg[:content] << "\n\n"
+        when "user"
+          prompt << "User: " << msg[:content] << "\n"
+        when "assistant"
+          prompt << "Assistant: " << msg[:content] << "\n"
+        when "tool"
+          prompt << "Tool Result: " << msg[:content] << "\n"
+        end
+      end
+      
+      prompt << "Assistant: "
       prompt.to_s
+    end
+
+    private def generate_response(prompt : String) : String
+      response = ""
+      @disk_cache.generate(prompt) do |token|
+        response += token
+      end
+      response.strip
+    end
+
+    private def extract_tool_name(response : String) : String
+      if match = /"name":\s*"([^"]+)"/.match(response)
+        return match[1].to_s
+      end
+      "unknown"
+    end
+
+    private def extract_tool_args(response : String) : String
+      if match = /"arguments":\s*(\{[^}]+\})/.match(response)
+        return match[1].to_s
+      end
+      "{}"
     end
 
     private def load_system_prompt : String
@@ -152,15 +226,14 @@ module Speak
       puts "=" * 70
       puts "Model: #{@settings.model_file}"
       puts "Context: #{@settings.context_size} tokens"
-      puts "KV Cache: #{@settings.kv_cache_type}"
-
+      
       memory_content = @tool.load_user_memory
       memory_size = memory_content.bytesize
       puts "Memory: #{memory_size} bytes (#{memory_content.lines.size} lines)"
-
+      
       puts "=" * 70
-      puts "Commands: exit, clear, history, save, memory, clearmemory"
-      puts "Tools: <read>file</read> | <search>query</search> | <memory>fact</memory>"
+      puts "Commands: exit, clear, history, save, memory, clearmemory, reset"
+      puts "Tools: read_file, search_web, remember, finish"
       puts "=" * 70
     end
 
@@ -187,22 +260,28 @@ module Speak
     end
 
     private def show_memory
-      memory = @tool.load_user_memory
-
-      if memory.empty?
-        puts "\nNo memory stored yet."
-        puts "The AI will remember facts when you say things like:"
-        puts "  'I'm a software engineer'"
-        puts "  'My name is Sarah'"
-        puts "  'I prefer short answers'"
+      user_memory = @tool.load_user_memory
+      
+      if user_memory.empty?
+        puts "\nNo user memory stored yet."
       else
         puts "\n" + "=" * 70
         puts "User Memory".center(70)
         puts "=" * 70
-        puts memory
+        puts user_memory
         puts "=" * 70
-        puts "\nYou can edit this file directly: #{Tool::MEMORY_FILE}"
       end
+      
+      agent_memory = @memory.build_memory_prompt
+      if !agent_memory.empty?
+        puts "\n" + "=" * 70
+        puts "Agent Working Memory".center(70)
+        puts "=" * 70
+        puts agent_memory
+        puts "=" * 70
+      end
+      
+      puts "\nMemory file: #{Tool::MEMORY_FILE}"
     end
 
     private def clear_screen
