@@ -9,6 +9,7 @@ Run powerful language models directly on your machine with disk-based KV caching
 
 [![Crystal](https://img.shields.io/badge/Crystal-1.12-000000?logo=crystal)](https://crystal-lang.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![Lines of Code](https://img.shields.io/badge/LOC-1,133-blue)
 
 <br>
 
