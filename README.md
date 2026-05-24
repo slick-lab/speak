@@ -1,105 +1,184 @@
 
 <div align="center">
 
-# Speak
+# speak
 
-**A lightweight local LLM inference engine written in Crystal**
+**A local AI assistant that runs on your computer. No cloud. No subscription. Your data stays with you.**
 
-Run powerful language models directly on your machine with disk-based KV caching, hardware-aware configuration, and efficient resource management.
+![speak logo](https://raw.githubusercontent.com/zendrx/speak/master/speak.JPG)
 
 [![Crystal](https://img.shields.io/badge/Crystal-1.12-000000?logo=crystal)](https://crystal-lang.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![Lines of Code](https://img.shields.io/badge/LOC-1,133-blue)
-
-<br>
-
-<!-- Speak Logo SVG -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="120" height="120">
-  <circle cx="100" cy="100" r="95" fill="#1a1a2e" stroke="#e94560" stroke-width="3"/>
-  <polygon points="60,140 80,155 85,130" fill="#e94560"/>
-  <rect x="40" y="50" width="120" height="85" rx="15" fill="#e94560"/>
-  <rect x="52" y="62" width="96" height="60" rx="8" fill="#1a1a2e"/>
-  <polygon points="100,70 115,85 100,100 85,85" fill="#e94560" opacity="0.8"/>
-  <line x1="62" y1="85" x2="100" y2="85" stroke="#e94560" stroke-width="3" stroke-linecap="round"/>
-  <line x1="62" y1="95" x2="118" y2="95" stroke="#e94560" stroke-width="3" stroke-linecap="round"/>
-  <line x1="62" y1="105" x2="108" y2="105" stroke="#e94560" stroke-width="3" stroke-linecap="round"/>
-  <text x="100" y="175" text-anchor="middle" fill="#e94560" font-size="12" font-family="monospace">speak</text>
-</svg>
+[![Lines of Code](https://tokei.rs/b1/github/zendrx/speak?category=code)](https://github.com/zendrx/speak)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![Made with Crystal](https://img.shields.io/badge/Made%20with-Crystal-000000)](https://crystal-lang.org/)
 
 </div>
 
 ---
 
+## Table of Contents
+
+- [What is speak?](#what-is-speak)
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Requirements](#requirements)
+- [Usage](#usage)
+- [Configuration](#configuration)
+- [Architecture](#architecture)
+- [How speak saves RAM](#how-speak-saves-ram)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [License](#license)
+
+---
+
+## What is speak?
+
+speak is a local AI assistant that runs entirely on your machine. It is designed for normal computers (4-6GB RAM), not expensive servers. No internet connection needed. No monthly fee. Your conversations never leave your computer.
+
+> speak is inspired by [antirez's ds4](https://github.com/antirez/ds4) but built for everyday laptops, not high-end Macs.
+
+It remembers who you are across sessions. It can read your files. It can search the web. And it does all of this using less than 2GB of RAM.
+
+---
+
 ## Features
 
-- **Disk-based KV cache** – Persistent conversation state stored on SSD, keeping RAM usage flat and low (<2GB) regardless of conversation length
-- **Hardware-aware configuration** – Automatically detects total and available RAM, adjusts context size, mmap, and KV cache type
-- **Resumable model downloads** – Automatic model installation with partial download recovery and real-time progress tracking
-- **Streaming output** – Tokens appear as they are generated for a responsive chat experience
-- **System resource monitoring** – Real‑time detection of RAM, CPU cores, AVX2, and disk space
-- **Flexible model quantization** – Supports Q2_K, Q4_K_M, and Q6_K for Nanbeige4.1‑3B
-- **Configurable settings** – Context size, KV cache type, temperature, max tokens via JSON
-- **User overrides** – Advanced users can edit `config.json` to override any auto-detected setting
-- **Custom system prompts** – Modify the embedded system prompt and recompile
+| Feature | What it means for you | Status |
+|:--------|:----------------------|:------:|
+| 100% Local | Runs on your laptop. No data sent to anyone. | Yes |
+| Persistent Memory | Tell speak something once. It remembers forever. | Yes |
+| File Reading | "Read my config.json" - speak shows you the content. | Yes |
+| Web Search | "Search for latest news" - speak finds current information. | Yes |
+| Low RAM Usage | Uses disk caching. Long conversations don't fill your memory. | Yes |
+| Hardware Detection | Auto-configures itself for your computer. | Yes |
+| Offline First | Works without internet. Web search is optional. | Yes |
+| Streaming Output | Tokens appear as they are generated. | Yes |
+| Agent Loop | Multi-step tool use (search, read, then answer). | Yes |
+| Disk KV Cache | Conversation state saved to SSD, not RAM. | Yes |
+| Resumable Downloads | Interrupted model downloads continue where they stopped. | Yes |
+
+---
+
+## Quick Start
+
+### One-liner
+
+```bash
+git clone https://github.com/zendrx/speak.git && cd speak && shards install && crystal build src/speak.cr --release -o speak && ./speak
+```
+
+Step by step
+
+```bash
+# Clone the repository
+git clone https://github.com/zendrx/speak.git
+cd speak
+
+# Install dependencies
+shards install
+
+# Build the binary
+crystal build src/speak.cr --release -o speak
+
+# Run speak
+./speak
+```
+
+On first run, speak will:
+
+1. Detect your RAM and CPU
+2. Create a config file for your hardware
+3. Download the AI model (2.5GB)
+4. Start the chat
 
 ---
 
 ## Requirements
 
-- Crystal language (0.35+)
-- GGUF format model (Nanbeige4.1‑3B recommended)
-- Linux (uses `/proc/meminfo`) or macOS (limited support)
-- Minimum 4GB RAM (8GB recommended)
-- Disk space: 1.7‑4.0 GB for model storage
+| Component | Minimum | Recommended | 
+| ---- | ---- | ---- |
+| RAM |  4 GB | 8 GB | 
+| Storage | 3 GB free | 10 GB free | 
+| OS  | Linux | Ubuntu 22.04+ | 
+| CPU | Any 64-bit | AVX2 support | 
+
+macOS works but is experimental. Windows support coming soon.
 
 ---
 
-## Dependencies
-
-- `llama.cr` – Crystal bindings to llama.cpp (installed via `shards`)
-
----
-
-## Installation
-
-```bash
-git clone https://github.com/zendrx/speak.git
-cd speak
-shards install
-crystal build src/speak.cr --release -o speak
-mkdir -p ./speak/models
-```
-
----
-
-Usage
-
-```bash
-./speak
-```
-
-On first run, Speak will:
-
-1. Detect total and available RAM
-2. Create ./speak/config.json with optimal settings
-3. Check for the model in ./speak/models/
-4. Download the model if missing (resume + progress bar)
-5. Initialize the LLM context (mmap if RAM < 8GB, full load otherwise)
-6. Start the interactive chat interface
+## Usage
 
 Chat Commands
 
-Command Action
-exit, quit Save conversation and exit
-clear Clear the screen
-history Show conversation history
-save Manually save conversation
+Inside the chat, type these commands:
+
+| Command | Action | 
+| ---- | ---- |
+| exit or quit |  Save and quit |
+| clear | Clear the screen | 
+| history | Show conversation history | 
+| save | Save conversation manually | 
+| memory | Show what speak remembers about you | 
+| clearmemory | Clear all memories | 
+| reset | Reset working memory | 
+
+Example conversation
+
+```
+$ ./speak
+
+======================================================================
+                         speak - Local AI Assistant
+======================================================================
+
+> Hello, who are you?
+
+speak: I am speak, a local AI assistant running on your computer.
+       I can read files, search the web, and remember things about you.
+
+> My name is Sarah and I love Python
+
+speak: I've remembered that your name is Sarah and you love Python.
+
+> Read my config.json
+
+speak: {
+  "detected": {
+    "total_ram_mb": 8192,
+    "available_ram_mb": 6200
+  },
+  "active": {
+    "context_size": 2048,
+    "model_quant": "Q4_K_M"
+  }
+}
+
+> Search for Python 3.13 features
+
+speak: Search results for: Python 3.13 features
+
+1. Python 3.13 Release Notes
+   URL: https://docs.python.org/3.13/whatsnew/3.13.html
+   Improved error messages, incremental garbage collection...
+
+> What do you know about me?
+
+speak: Your name is Sarah and you love Python.
+
+> exit
+
+Goodbye.
+```
 
 ---
 
-Configuration
+## Configuration
 
-Configuration is stored in ./speak/config.json after first run. The file contains:
+All settings are stored in ./speak/config.json. You can edit this file to customize speak.
+
+Configuration Structure
 
 ```json
 {
@@ -109,12 +188,16 @@ Configuration is stored in ./speak/config.json after first run. The file contain
     "os_reserved_ram_mb": 512
   },
   "active": {
+    "cpu_cores": 4,
+    "has_avx2": true,
+    "free_disk_space_mb": 51200,
     "context_size": 2048,
     "kv_cache_type": "standard",
     "model_quant": "Q4_K_M",
     "model_file": "nanbeige-3b-q4_k_m.gguf",
     "temperature": 0.7,
-    "max_tokens": 512
+    "max_tokens": 512,
+    "use_mmap": true
   },
   "user_overrides": {
     "os_reserved_ram_mb": null,
@@ -122,128 +205,201 @@ Configuration is stored in ./speak/config.json after first run. The file contain
     "kv_cache_type": null,
     "model_quant": null,
     "temperature": null,
-    "max_tokens": null
+    "max_tokens": null,
+    "use_mmap": null
   }
 }
 ```
 
-To override auto-detected settings, edit the user_overrides section. For example:
+## Common Settings
+
+| Setting | What it does |  Default |
+---- | ---- | ---- |
+|context_size | How many tokens the AI remembers|  2048|
+|temperature | Creativity (0.0 = strict, 1.5 = creative) | 0.7|
+|max_tokens | Maximum response length | 512|
+|model_quant | Quality vs speed (Q2_K, Q4_K_M, Q6_K) | Q4_K_M|
+
+Make AI more creative
+
+Edit ./speak/config.json:
 
 ```json
 "user_overrides": {
-  "context_size": 4096,
-  "temperature": 0.9
+  "temperature": 1.2
 }
 ```
 
-System Prompt Customization
+Reduce RAM usage
 
-The system prompt is embedded at compile time from src/speak/system_prompt.txt. To customize the AI's behavior:
+```json
+"user_overrides": {
+  "context_size": 1024,
+  "model_quant": "Q2_K"
+}
+```
 
-1. Edit src/speak/system_prompt.txt with your preferred instructions
-2. Rebuild with crystal build src/speak.cr --release -o speak
-3. Run ./speak with your custom instructions
+Custom System Prompt
 
-Default system prompt:
+Edit src/speak/system_prompt.txt and recompile. The prompt is embedded at build time.
+
+---
+
+## Architecture
+
+System Flow
 
 ```
-You are speak, a helpful AI assistant. Be concise and accurate.
+User Input
+    |
+    v
+[Launch] ---> [Agent Loop] ---> [Tool Calls]
+    |              |                  |
+    v              v                  v
+[Config]      [Memory]           [Tool Executor]
+    |              |                  |
+    v              v                  v
+[Model] <---- [Disk Cache] <---- [Web Search]
+    |
+    v
+Response
+```
+
+## File Structure
+
+```
+speak/
++-- src/
+    +-- speak.cr              Entry point
+    +-- speak/
+        +-- system.cr         Hardware detection
+        +-- config.cr         JSON configuration
+        +-- install.cr        Model downloader
+        +-- disk.cr           Disk-backed KV cache
+        +-- tool.cr           Tool system
+        +-- memory.cr         Agent memory
+        +-- launch.cr         Chat interface
+        +-- system_prompt.txt Embedded prompt
++-- lib/                      Shards
++-- shard.yml
++-- README.md
+```
+
+RAM Tiers
+
+| Available RAM |  Model Quant|  Context Size|  mmap | 
+| ---- | ---- | ----| ---- |
+| 3 GB | Q2_K | 512 | Enabled
+|  3-6 GB | Q4_K_M | 1024 |  Enabled
+| 6-12 GB | Q4_K_M | 2048 |  Enabled
+|  12 GB | Q6_K | 4096 |  Disabled
+
+---
+
+## How speak saves RAM
+
+speak uses two techniques to keep memory low:
+
+1. Memory Mapping (mmap)
+
+The model stays on disk. Only the parts needed are loaded into RAM. This reduces RAM usage from 2.5GB to under 500MB for the model.
+
+2. Disk KV Cache
+
+Conversation memory (KV cache) is saved to SSD, not RAM. Each turn extends the cache on disk, not in memory.
+
+```
+Without Disk Cache:  RAM usage grows with conversation length (2GB -> 8GB crash)
+With Disk Cache:     RAM usage stays flat (2GB for 10 turns or 10,000 turns)
 ```
 
 ---
 
-Architecture
+## Troubleshooting
 
-Project Structure
+Unable to create dir ./speak
 
-```
-.
-├── src/
-│   ├── speak.cr              # Main entry point
-│   ├── speak/
-│   │   ├── system.cr         # Hardware detection (RAM, CPU, disk)
-│   │   ├── config.cr         # JSON configuration management
-│   │   ├── install.cr        # Model downloader with resume support
-│   │   ├── disk.cr           # Disk-backed KV cache (ds4-style)
-│   │   ├── launch.cr         # Streaming chat interface
-│   │   └── system_prompt.txt # Embedded system prompt
-├── spec/                     # Tests
-└── shard.yml                 # Crystal dependencies
-```
-
-Key Modules
-
-System Module - Hardware detection:
-
-Method Returns
-```text
-System.total_ram_mb Total RAM in megabytes
-System.available_ram_mb Available RAM in megabytes
-System.process_ram_mb Current process memory usage
-System.cpu_cores Number of CPU cores
-System.cpu_has_avx2 Boolean for AVX2 support
-System.free_disk_space_mb(path) Free disk space at path
-```
-Install Module - Model management:
-
-- Resumable downloads with partial file recovery
-- Real-time progress bar with speed and ETA
-- Automatic retry with exponential backoff
-- Integrity verification (size check)
-
-Disk Cache Module - KV cache persistence:
-
-- Saves conversation state to SSD, not RAM
-- SHA1 token-ID-based cache keys (ds4-compatible)
-- LRU cache cleanup (maximum 50 files)
-- Loads previous sessions without reprocessing
-
-RAM Tiers and Optimization
-
-Available RAM mmap Context Size KV Cache Type
-```c
-< 3 GB Enabled 512 q4_0
-3-6 GB Enabled 1024 q4_0
-6-12 GB Enabled 2048 q8_0
-> 12 GB Disabled 4096 q8_0
-```
----
-
-Development
-
-Building for Development
+Your binary is named speak and conflicts with the data directory. Rename the binary:
 
 ```bash
-crystal build src/speak.cr -o speak
+mv speak speak_app
+./speak_app
 ```
 
-Running Tests
+401 Unauthorized during download
+
+The model repository requires authentication. Run:
 
 ```bash
-crystal spec
+./hfd.sh Edge-Quant/Nanbeige4.1-3B-Q4_K_M-GGUF --include *.gguf --local-dir ./speak/models
 ```
 
-Model Downloads
+Then run ./speak again.
 
-Models are downloaded from HuggingFace. The downloader supports:
+Model loads slowly on HDD
 
-- Resumable downloads – Interrupted downloads continue from where they stopped
-- Progress tracking – Real-time percentage, speed (MB/s), and ETA
-- Streaming – 32KB buffer for efficient memory usage
-- Retry logic – Exponential backoff on network errors
+Use the smaller Q2_K model. Edit config.json:
+
+```json
+"user_overrides": {
+  "model_quant": "Q2_K"
+}
+```
+
+Then delete the old model file in ./speak/models/ and restart speak.
+
+Readline not working
+
+Install the system library:
+
+```bash
+# Ubuntu/Debian
+sudo apt install libreadline-dev
+
+# macOS
+brew install readline
+```
+
+Undefined method 'tokenize'
+
+Ensure you are using the correct API: @vocab.tokenize not context.tokenize.
 
 ---
 
-License
+## Contributing
 
-This project is licensed under the MIT License. See LICENSE file for details.
+Contributions are welcome. Please see CONTRIBUTING.md for guidelines.
+
+```bash
+git clone https://github.com/zendrx/speak.git
+cd speak
+# Make your changes
+crystal build src/speak.cr --release -o speak_app
+./speak_app
+```
 
 ---
 
-Contributors
+## License
 
--  zendrx – Creator and maintainer
+MIT License. See LICENSE file for details.
 
 ---
 
-<div align="center">Made with Crystal
+## Credits
+
+| Project | Role | 
+| ---- | ---- | 
+|  **Crystal | Language** | 
+| **llama.cpp | Inference engine** | 
+| **llama.cr | Crystal bindings** | 
+| **Nanbeige | Model** | 
+| **ds4 | Disk cache inspiration** | 
+
+---
+
+<div align="center">speak - Your local AI assistant
+
+Built with Crystal
+
+</div>
