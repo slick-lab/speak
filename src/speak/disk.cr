@@ -227,43 +227,39 @@ module Speak
     # Returns true if the cache was loaded successfully, false otherwise.
     # Corrupted cache files are automatically deleted to prevent future errors.
     private def load_cache(path : String) : Bool
-      begin
-        return false unless File.exists?(path)
-        return false if File.size(path) == 0
+      return false unless File.exists?(path)
+      return false if File.size(path) == 0
 
-        # Load the state from disk using context_size from config
-        # Destination context size must be >= source context size
-        tokens = @state.load_file(path, @settings.context_size)
+      # Load the state from disk using context_size from config
+      # Destination context size must be >= source context size
+      tokens = @state.load_file(path, @settings.context_size)
 
-        # Synchronize our token history with loaded state
-        @token_history = tokens.dup
+      # Synchronize our token history with loaded state
+      @token_history = tokens.dup
 
-        return !tokens.empty?
-      rescue ex
-        STDERR.puts "Warning: Failed to load cache from #{path}: #{ex.message}"
-        File.delete(path) if File.exists?(path)
-        return false
-      end
+      !tokens.empty?
+    rescue ex
+      STDERR.puts "Warning: Failed to load cache from #{path}: #{ex.message}"
+      File.delete(path) if File.exists?(path)
+      false
     end
 
     # Saves KV cache to disk using Llama::State.
     #
     # Requires the current token sequence to properly save the conversation state.
     private def save_cache(path : String, cache_key : String)
-      begin
-        success = @state.save_file(path, @token_history)
+      success = @state.save_file(path, @token_history)
 
-        if success
-          # Update or create metadata for this cache
-          @cache_metadata[cache_key] = CacheMetadata.new(
-            access_time: Time.utc.to_unix,
-            token_count: @token_history.size
-          )
-          save_metadata
-        end
-      rescue ex
-        STDERR.puts "Warning: Failed to save cache to #{path}: #{ex.message}"
+      if success
+        # Update or create metadata for this cache
+        @cache_metadata[cache_key] = CacheMetadata.new(
+          access_time: Time.utc.to_unix,
+          token_count: @token_history.size
+        )
+        save_metadata
       end
+    rescue ex
+      STDERR.puts "Warning: Failed to save cache to #{path}: #{ex.message}"
     end
 
     # Updates the access time for a cached conversation.

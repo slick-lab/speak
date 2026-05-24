@@ -13,5 +13,7 @@ crystal: '>= 1.19.1'
 dependencies:
   readline:
     github: crystal-lang/crystal-readline
+  ameba:
+    github: crystal-ameba/ameba
 
 license: MIT

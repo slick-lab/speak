@@ -5,7 +5,7 @@ module Speak
       if match = meminfo.match(/MemTotal:\s+(\d+)/)
         return match[1].to_u64 // 1024
       end
-      return 8192_u64
+      8192_u64
     end
 
     def self.available_ram_mb : UInt64
@@ -16,7 +16,7 @@ module Speak
       if match = meminfo.match(/MemFree:\s+(\d+)/)
         return match[1].to_u64 // 1024
       end
-      return 4096_u64
+      4096_u64
     end
 
     def self.process_ram_mb : UInt64
@@ -27,7 +27,7 @@ module Speak
         resident_pages = parts[1].to_u64
         return (resident_pages * page_size) // (1024 * 1024)
       end
-      return 100_u64
+      100_u64
     end
 
     def self.cpu_cores : Int32
@@ -42,7 +42,7 @@ module Speak
       if count > 4
         return 4
       end
-      return count > 0 ? count : 4
+      count > 0 ? count : 4
     end
 
     def self.cpu_has_avx2 : Bool
@@ -50,7 +50,7 @@ module Speak
       if cpuinfo.include?("avx2")
         return true
       end
-      return false
+      false
     end
 
     def self.free_disk_space_mb(path : String) : UInt64
@@ -63,20 +63,20 @@ module Speak
         end
       rescue
       end
-      return 0_u64
+      0_u64
     end
 
     def self.ram_tier : Symbol
       total_ram = total_ram_mb
       case total_ram
       when 0..4096
-        return :ultra_low
+        :ultra_low
       when 4096...6144
-        return :low
+        :low
       when 6144...8192
-        return :medium
+        :medium
       else
-        return :high
+        :high
       end
     end
 
@@ -84,13 +84,13 @@ module Speak
       total = total_ram_mb
       case total
       when 0..4096
-        return 256_u64
+        256_u64
       when 4096...6144
-        return 512_u64
+        512_u64
       when 6144...8192
-        return 1024_u64
+        1024_u64
       else
-        return 2048_u64
+        2048_u64
       end
     end
 
@@ -98,11 +98,11 @@ module Speak
       avail = available_ram_mb
       case avail
       when 0...3000
-        return "Q2_K"
+        "Q2_K"
       when 3000...6000
-        return "Q4_K_M"
+        "Q4_K_M"
       else
-        return "Q6_K"
+        "Q6_K"
       end
     end
 
@@ -110,11 +110,11 @@ module Speak
       avail = available_ram_mb
       case avail
       when 0...3000
-        return 512
+        512
       when 3000...6000
-        return 1024
+        1024
       else
-        return 8192
+        8192
       end
     end
 
@@ -122,20 +122,20 @@ module Speak
       quant = recommended_quant
       case quant
       when "Q2_K"
-        return "nanbiege-3b-q2_k.gguf"
+        "nanbiege-3b-q2_k.gguf"
       when "Q4_K_M"
-        return "nanbiege-3b-q4_k_m.gguf"
+        "nanbiege-3b-q4_k_m.gguf"
       else
-        return "nanbiege-3b-q6_k.gguf"
+        "nanbiege-3b-q6_k.gguf"
       end
     end
 
     def self.kv_cache_type : String
       avail = available_ram_mb
       if avail < 6000
-        return "memory"
+        "memory"
       else
-        return "disk"
+        "disk"
       end
     end
   end

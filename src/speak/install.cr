@@ -3,25 +3,25 @@ require "json"
 
 module Speak
   class Install
-    CACHE_DIR = "./speak/models"
+    CACHE_DIR      = "./speak/models"
     HFD_SCRIPT_URL = "https://hf-mirror.com/hfd/hfd.sh"
-    HFD_PATH = "./hfd.sh"
+    HFD_PATH       = "./hfd.sh"
 
     MODEL_URLS = {
       "Q2_K" => {
-        repo_id: "mradermacher/Nanbeige4.1-3B-GGUF",
+        repo_id:  "mradermacher/Nanbeige4.1-3B-GGUF",
         filename: "Nanbeige4.1-3B.Q2_K.gguf",
-        size_mb: 1700,
+        size_mb:  1700,
       },
       "Q4_K_M" => {
-        repo_id: "Edge-Quant/Nanbeige4.1-3B-Q4_K_M-GGUF",
+        repo_id:  "Edge-Quant/Nanbeige4.1-3B-Q4_K_M-GGUF",
         filename: "nanbeige4.1-3b-q4_k_m.gguf",
-        size_mb: 2500,
+        size_mb:  2500,
       },
       "Q6_K" => {
-        repo_id: "mradermacher/Nanbeige4.1-3B-GGUF",
+        repo_id:  "mradermacher/Nanbeige4.1-3B-GGUF",
         filename: "Nanbeige4.1-3B.Q6_K.gguf",
-        size_mb: 3300,
+        size_mb:  3300,
       },
     }
 
@@ -62,10 +62,10 @@ module Speak
 
       if File.exists?(dest_path)
         puts "\nInstallation complete: #{model_info[:filename]}"
-        return true
+        true
       else
         puts "\nInstallation failed"
-        return false
+        false
       end
     end
 

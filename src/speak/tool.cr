@@ -4,82 +4,82 @@ require "uri"
 
 module Speak
   class Tool
-    MEMORY_DIR = "./speak/memory"
-    MEMORY_FILE = "./speak/memory/user.md"
-    SEARCH_TIMEOUT = 30.seconds
+    MEMORY_DIR         = "./speak/memory"
+    MEMORY_FILE        = "./speak/memory/user.md"
+    SEARCH_TIMEOUT     = 30.seconds
     MAX_SEARCH_RESULTS = 10
 
     @memory_cache : String?
 
     TOOLS_SCHEMA = [
       {
-        "type": "function",
+        "type":     "function",
         "function": {
-          "name": "read_file",
+          "name":        "read_file",
           "description": "Read the contents of a local file. Returns the file content as text.",
-          "parameters": {
-            "type": "object",
+          "parameters":  {
+            "type":       "object",
             "properties": {
               "path": {
-                "type": "string",
-                "description": "The file path to read (relative or absolute within current directory)"
-              }
+                "type":        "string",
+                "description": "The file path to read (relative or absolute within current directory)",
+              },
             },
-            "required": ["path"]
-          }
-        }
+            "required": ["path"],
+          },
+        },
       },
       {
-        "type": "function",
+        "type":     "function",
         "function": {
-          "name": "search_web",
+          "name":        "search_web",
           "description": "Search the web for current information. Returns up to 10 results with titles, URLs, and snippets.",
-          "parameters": {
-            "type": "object",
+          "parameters":  {
+            "type":       "object",
             "properties": {
               "query": {
-                "type": "string",
-                "description": "The search query to find information on the web"
-              }
+                "type":        "string",
+                "description": "The search query to find information on the web",
+              },
             },
-            "required": ["query"]
-          }
-        }
+            "required": ["query"],
+          },
+        },
       },
       {
-        "type": "function",
+        "type":     "function",
         "function": {
-          "name": "remember",
+          "name":        "remember",
           "description": "Store a fact about the user in long-term memory. This fact will be remembered across all future conversations.",
-          "parameters": {
-            "type": "object",
+          "parameters":  {
+            "type":       "object",
             "properties": {
               "fact": {
-                "type": "string",
-                "description": "The fact to remember (e.g., 'User name is Sarah', 'User prefers short answers')"
-              }
+                "type":        "string",
+                "description": "The fact to remember (e.g., 'User name is Sarah', 'User prefers short answers')",
+              },
             },
-            "required": ["fact"]
-          }
-        }
+            "required": ["fact"],
+          },
+        },
       },
       {
-        "type": "function",
+        "type":     "function",
         "function": {
-          "name": "finish",
+          "name":        "finish",
           "description": "Call this tool when you have completed the user's request and are ready to provide the final answer.",
-          "parameters": {
-            "type": "object",
+          "parameters":  {
+            "type":       "object",
             "properties": {
               "final_answer": {
-                "type": "string",
-                "description": "The complete final answer to the user's request"
-              }
+                "type":        "string",
+                "description": "The complete final answer to the user's request",
+              },
             },
-            "required": ["final_answer"]
-          }
-        }
-      }
+            "required": ["final_answer"],
+          },
+        },
+      },
     ]
 
     def initialize
@@ -103,29 +103,27 @@ module Speak
     end
 
     def execute_tool(name : String, arguments_json : String) : String
-      begin
-        args = JSON.parse(arguments_json)
-        
-        case name
-        when "read_file"
-          path = args["path"].as_s
-          read_file(path)
-        when "search_web"
-          query = args["query"].as_s
-          web_search(query)
-        when "remember"
-          fact = args["fact"].as_s
-          write_to_memory(fact, append: true)
-          "I've remembered: #{fact}"
-        when "finish"
-          final_answer = args["final_answer"].as_s
-          "FINISH:#{final_answer}"
-        else
-          "Error: Unknown tool '#{name}'"
-        end
-      rescue ex
-        "Error executing tool #{name}: #{ex.message}"
+      args = JSON.parse(arguments_json)
+
+      case name
+      when "read_file"
+        path = args["path"].as_s
+        read_file(path)
+      when "search_web"
+        query = args["query"].as_s
+        web_search(query)
+      when "remember"
+        fact = args["fact"].as_s
+        write_to_memory(fact, append: true)
+        "I've remembered: #{fact}"
+      when "finish"
+        final_answer = args["final_answer"].as_s
+        "FINISH:#{final_answer}"
+      else
+        "Error: Unknown tool '#{name}'"
       end
+    rescue ex
+      "Error executing tool #{name}: #{ex.message}"
     end
 
     def read_file(path : String) : String
@@ -155,9 +153,9 @@ module Speak
 
       begin
         content = File.read(full_path)
-        return content
+        content
       rescue ex
-        return "Error: Could not read file: #{ex.message}"
+        "Error: Could not read file: #{ex.message}"
       end
     end
 
@@ -171,8 +169,8 @@ module Speak
         client.connect_timeout = SEARCH_TIMEOUT
 
         response = client.get("/html/?q=#{encoded_query}", headers: HTTP::Headers{
-          "User-Agent" => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-          "Accept" => "text/html,application/xhtml+xml",
+          "User-Agent"      => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          "Accept"          => "text/html,application/xhtml+xml",
           "Accept-Language" => "en-US,en;q=0.9",
         })
 
@@ -183,14 +181,14 @@ module Speak
           if results.empty?
             return "No results found for: #{query}"
           end
-          return format_search_results(results, query)
+          format_search_results(results, query)
         else
-          return "Search failed with HTTP status: #{response.status_code}"
+          "Search failed with HTTP status: #{response.status_code}"
         end
       rescue ex : IO::TimeoutError
-        return "Search timed out after #{SEARCH_TIMEOUT.total_seconds} seconds. Please try a more specific query."
+        "Search timed out after #{SEARCH_TIMEOUT.total_seconds} seconds. Please try a more specific query."
       rescue ex
-        return "Search error: #{ex.message}"
+        "Search error: #{ex.message}"
       end
     end
 
@@ -284,7 +282,7 @@ module Speak
 
       header = <<-HEADER
 # User Memory File for speak
-# 
+#
 # This file contains information the AI has learned about you.
 # You can edit this file directly to add, remove, or correct facts.
 # The AI will read this file at the start of every conversation.

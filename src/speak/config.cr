@@ -60,13 +60,13 @@ module Speak
         config = Config.from_json(json)
         config.refresh_detected
         config.save(path)
-        return config
+        config
       else
         config = Config.detect_and_create
         dir = File.dirname(path)
         Dir.mkdir_p(dir) unless Dir.exists?(dir)
         config.save(path)
-        return config
+        config
       end
     end
 
@@ -97,7 +97,7 @@ module Speak
         temperature = nil
       )
 
-      return Config.new(detected, active, user_overrides)
+      Config.new(detected, active, user_overrides)
     end
 
     def refresh_detected
@@ -117,7 +117,7 @@ module Speak
         @user_overrides.temperature || @active.temperature,
         @user_overrides.max_tokens || @active.max_tokens
       )
-      return result
+      result
     end
 
     def save(path : String = "./speak/config.json")

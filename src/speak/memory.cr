@@ -3,9 +3,9 @@ require "digest/sha1"
 
 module Speak
   class AgentMemory
-    MEMORY_DIR = "./speak/agent_memory"
-    EPISODIC_DIR = "#{MEMORY_DIR}/episodic"
-    SEMANTIC_DIR = "#{MEMORY_DIR}/semantic"
+    MEMORY_DIR          = "./speak/agent_memory"
+    EPISODIC_DIR        = "#{MEMORY_DIR}/episodic"
+    SEMANTIC_DIR        = "#{MEMORY_DIR}/semantic"
     WORKING_MEMORY_FILE = "#{MEMORY_DIR}/working.json"
     @session_id : String
     @working : WorkingMemory
@@ -48,7 +48,7 @@ module Speak
       property user_input : String
       property assistant_response : String
       property tool_calls : Array(ToolCallRecord)
-      property outcome : String  # "success", "failure", "partial"
+      property outcome : String # "success", "failure", "partial"
 
       def initialize(@id, @session_id, @timestamp, @user_input, @assistant_response, @tool_calls, @outcome)
       end
@@ -57,7 +57,7 @@ module Speak
     struct SemanticMemory
       include JSON::Serializable
       property fact : String
-      property source : String  # "user", "observation", "inference"
+      property source : String # "user", "observation", "inference"
       property confidence : Float64
       property timestamp : Int64
 
@@ -161,7 +161,7 @@ module Speak
 
     def load_recent_episodes(limit : Int32 = 10) : Array(EpisodicMemory)
       episodes = [] of EpisodicMemory
-      Dir.glob("#{EPISODIC_DIR}/*.json").sort.reverse.each do |file|
+      Dir.glob("#{EPISODIC_DIR}/*.json").sort.reverse!.each do |file|
         break if episodes.size >= limit
         data = File.read(file)
         episodes << EpisodicMemory.from_json(data)
